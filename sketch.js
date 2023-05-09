@@ -6,6 +6,7 @@ let fridge = false;
 let freezer = false;
 let recipes = false;
 let gameOver = false;
+let startGame = false;
 
 //timer and order stuff
 let orderTimer = 60;
@@ -71,6 +72,38 @@ const sounds = new Tone.Players({
   "ice": "sounds/ice.mp3",
   "milk": "sounds/milk.mp3"
 }).toDestination();
+
+let port;
+let writer;
+let reader;
+let on = false;
+let clicked = "off";
+let buttonPressed = false;
+const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
+
+class LineBreakTransformer {
+  constructor() {
+    // A container for holding stream data until a new line.
+    this.chunks = "";
+  }
+
+  transform(chunk, controller) {
+    // Append new chunks to existing chunks.
+    this.chunks += chunk;
+    // For each line breaks in chunks, send the parsed lines out.
+    const lines = this.chunks.split("\n");
+    this.chunks = lines.pop();
+    lines.forEach((line) => controller.enqueue(line));
+  }
+
+  flush(controller) {
+    // When the stream is closed, flush any remaining chunks out.
+    controller.enqueue(this.chunks);
+  }
+}
+
 
 //cup class
 
@@ -225,19 +258,38 @@ function setup() {
   imageMode(CENTER);
   textFont(gameFont);
   textSize(22);
+  if ("serial" in navigator) {
+    let button = createButton('connect');
+    button.position(20,20);
+    button.mousePressed(connect);
+
+    // let button2 = createButton("turn the light on");
+    // button2.position(0,20);
+    // button2.mousePressed(startLED);
+  }
 }
 
 function draw() {
   background(220);
+
   if(gameStart) {
-   background("black");
+  background("black");
     push();
       fill("white");
-      text("Press enter to begin!", width/2, height/2);
+
+      text("Press arduino button to begin!", width/2, height/2);
     pop();
   }
 
-  if (frameCount % 60 == 0 && orderTimer > 0) { 
+  if (reader) {
+    serialRead();
+  }
+
+  if(clicked == "on") {
+    gameStart = false;
+  }
+
+  if (!gameStart && frameCount % 60 == 0 && orderTimer > 0) { 
     orderTimer --;
   }
 
@@ -411,8 +463,6 @@ function draw() {
    {
       backButton();
       orderNote();
-
-      //console.log(mouseX,mouseY);
    }
 
    if (recipes) {
@@ -466,15 +516,19 @@ function draw() {
 }
 
 
-function keyPressed() {
-  if (keyCode === ENTER && gameStart) { 
-    gameStart = false;
-  }
+// function keyPressed() {
+//   if (keyCode === ENTER && gameStart) { 
+//     gameStart = false;
+//   }
 
-  if (keyCode === ENTER && gameOver) { 
-    gameStart = true;
-  }
-}
+//   if (keyCode === ENTER && gameOver) { 
+//     gameStart = true;
+//   }
+
+  
+// }
+
+//******************************************************* MOUSE PRESSED */
 function mousePressed() {
   
   //back buttons and zoomed screen interactions
@@ -696,13 +750,11 @@ function mousePressed() {
     else if (collision(cups1)) {
       sounds.player("cup").start();
       coffee.spawn = true;
-      // console.log("cold cup");
     }
     //hot cups
     else if (collision(cups2)) {
       sounds.player("cup").start();
       coffee.spawn = true;
-      // console.log("hot cup");
     }
     //freezer
     else if (collision(smallFreezer)) {
@@ -785,4 +837,32 @@ function collision (Item) {
     return true;
   }
   else {return false;}
+}
+
+async function serialRead() {
+  while(true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      reader.releaseLock();
+      break;
+    }
+    console.log(value);
+
+    if(value.includes("on")) {
+      clicked = "on";
+    }
+    else if(value.includes("off")) {
+      clicked = "off";
+    }
+  }
+}
+
+async function connect() {
+  port = await navigator.serial.requestPort();
+  await port.open({baudRate: 9600});
+  writer = port.writable.getWriter();
+  reader = port.readable
+  .pipeThrough(new TextDecoderStream())
+  .pipeThrough(new TransformStream(new LineBreakTransformer()))
+  .getReader();
 }
