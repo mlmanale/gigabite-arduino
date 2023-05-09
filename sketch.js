@@ -76,7 +76,7 @@ const sounds = new Tone.Players({
 let port;
 let writer;
 let reader;
-let on = false;
+let on = "0";
 let clicked = "off";
 let buttonPressed = false;
 const decoder = new TextDecoder();
@@ -262,15 +262,13 @@ function setup() {
     let button = createButton('connect');
     button.position(20,20);
     button.mousePressed(connect);
-
-    // let button2 = createButton("turn the light on");
-    // button2.position(0,20);
-    // button2.mousePressed(startLED);
   }
 }
 
 function draw() {
   background(220);
+
+  
 
   if(gameStart) {
   background("black");
@@ -295,6 +293,8 @@ function draw() {
 
   if(orderTimer <= 57) {
     order1 = true;
+    on = "1"
+    lightUp();
   }
 
   if(orderTimer <= 50) {
@@ -311,8 +311,7 @@ function draw() {
 
   if(!gameStart && !espresso && !syrup && !fridge && !freezer && !recipes & !gameOver) {
     background(150,150,150);
-  
-  
+
     stroke("black");
     strokeWeight(2);
     //counter
@@ -369,6 +368,7 @@ function draw() {
         fill("red");
         rect(135, 440, 200, 5);
       }
+      on = "1";
     }
 
     if(order2) {
@@ -857,6 +857,20 @@ async function serialRead() {
   }
 }
 
+function lightUp(){
+  try {
+    if(on == "1"){
+      writer.write(encoder.encode("1"));
+      console.log(on);
+    }
+    else {writer.write(encoder.encode("0"));}
+  } catch (error) {
+    console.log("error")
+  }
+  
+
+}
+
 async function connect() {
   port = await navigator.serial.requestPort();
   await port.open({baudRate: 9600});
@@ -865,4 +879,8 @@ async function connect() {
   .pipeThrough(new TextDecoderStream())
   .pipeThrough(new TransformStream(new LineBreakTransformer()))
   .getReader();
+}
+
+if(clicked == "on") {
+  gameStart = false;
 }
